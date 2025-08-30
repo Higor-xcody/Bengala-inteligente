@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bengala Inteligente</title>
+<style>
+  :root { --w: min(1000px, 92%); }
+  body { margin:0; background:#0d1117; color:#fff; font-family:system-ui, Arial, sans-serif; display:flex; flex-direction:column; align-items:center; }
+  header { width:100%; display:flex; justify-content:space-between; align-items:center; padding:16px; background:#161b22; }
+  .left-header,.right-header { display:flex; align-items:center; gap:12px; }
+  input, button { background:#0b1220; color:#fff; border:1px solid #2a3344; border-radius:10px; padding:10px 12px; cursor:pointer; }
+  .dot { width:10px; height:10px; border-radius:50%; }
+  .online { background:limegreen; } .offline { background:#b91c1c; }
+  .radar { display:flex; flex-direction:column; gap:16px; justify-content:center; align-items:center; margin:24px auto; width:var(--w); }
+  .sensor { width:100%; background:#161b22; border-radius:16px; padding:20px; text-align:left; transition:background 0.3s; }
+  .sensor h3 { margin:0 0 10px; opacity:.85; }
+  .sensor-value { font-size:1.6rem; font-weight:800; }
+  .danger { background:#b91c1c !important; }
+  .alert { margin:0 auto 16px; padding:14px; border-radius:12px; background:#21262d; width:var(--w); text-align:center; transition:background 0.3s; }
+  .history { width:var(--w); margin:0 auto 30px; padding:16px; background:#161b22; border-radius:12px; }
+  .history ul { margin:0; padding:0; list-style:none; }
+  .history li { padding:4px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="left-header">
+    <strong>👨‍🦯 Bengala Inteligente</strong>
+    <span id="statusTxt" class="status">
+      <span id="dot" class="dot online"></span>
+      <small>Simulação</small>
+    </span>
+  </div>
+  <div class="right-header">
+    <button id="btnVoice">Ativar voz 🔊</button>
+    <button id="btnLocation">📍 Compartilhar localização</button>
+  </div>
+</header>
+
+<div class="radar">
+  <div id="sensor-esq" class="sensor">
+    <h3>Sensor Esquerdo</h3>
+    <div id="valor-esq" class="sensor-value">-- cm</div>
+    <div id="qualidade-esq" style="font-size: 0.8rem; margin-top: 8px;">Aguardando…</div>
+  </div>
+  <div id="sensor-dir" class="sensor">
+    <h3>Sensor Direito</h3>
+    <div id="valor-dir" class="sensor-value">-- cm</div>
+    <div id="qualidade-dir" style="font-size: 0.8rem; margin-top: 8px;">Aguardando…</div>
+  </div>
+</div>
+
+<div id="alerta" class="alert">✅ Área livre</div>
+
+<div class="history">
+  <h3>Histórico</h3>
+  <ul id="historico"></ul>
+</div>
+
+<script>
+  const THRESHOLD_CM = 80;
+  let ultimoAviso = "", vozAtivada = false, vozSelecionada = null;
+
+  const btnVoice = document.getElementById('btnVoice');
+  const btnLocation = document.getElementById('btnLocation');
+  const alerta = document.getElementById('alerta');
+  const vEsq = document.getElementById('valor-esq');
+  const vDir = document.getElementById('valor-dir');
+  const sEsq = document.getElementById('sensor-esq');
+  const sDir = document.getElementById('sensor-dir');
+  const qEsq = document.getElementById('qualidade-esq');
+  const qDir = document.getElementById('qualidade-dir');
+  const historico = document.getElementById('historico');
+
+  // Voz
+  window.speechSynthesis.onvoiceschanged = () => {
+    const vozes = window.speechSynthesis.getVoices() || [];
+    vozSelecionada = vozes.find(v => /pt(-|_)BR/i.test(v.lang)) || vozes.find(v => v.lang.startsWith('pt')) || vozes[0] || null;
+  };
+  btnVoice.onclick = () => {
+    vozAtivada = !vozAtivada;
+    if (vozAtivada) { falar('Voz ativada.'); btnVoice.textContent = 'Desativar voz 🔇'; }
+    else { window.speechSynthesis.cancel(); btnVoice.textContent = 'Ativar voz 🔊'; }
+  };
+  function falar(texto) {
+    if (!vozAtivada) return;
+    const msg = new SpeechSynthesisUtterance(texto);
+    if (vozSelecionada) msg.voice = vozSelecionada;
+    msg.lang = "pt-BR";
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(msg);
+  }
+
+  // Atualiza sensor
+  function updateSensor(side, val) {
+    const elV = side === 'esq' ? vEsq : vDir;
+    const box = side === 'esq' ? sEsq : sDir;
+    const qual = side === 'esq' ? qEsq : qDir;
+
+    elV.textContent = val == null ? '-- cm' : `${val} cm`;
+    box.classList.remove('danger');
+    if (val !== null && val < THRESHOLD_CM) box.classList.add('danger');
+
+    if (val == null) qual.textContent = 'Sem leitura';
+    else qual.textContent = val > 350 ? 'Distante' : val > 150 ? 'Médio' : 'Próximo';
+
+    const li = document.createElement('li');
+    li.textContent = `${new Date().toLocaleTimeString()} — ${side === 'esq' ? 'Esq' : 'Dir'}: ${val == null ? 'Sem leitura' : val + ' cm'}`;
+    historico.prepend(li);
+    while (historico.children.length > 20) historico.removeChild(historico.lastChild);
+  }
+
+  function processarSensores(esq, dir) {
+    let aviso = "", visualText = "", isDanger = false;
+    if (esq !== null && dir !== null && esq < THRESHOLD_CM && dir < THRESHOLD_CM) {
+      const nivel = Math.floor(Math.min(esq, dir) / 10) * 10;
+      aviso = `Obstáculo à frente a ${nivel} centímetros`;
+      visualText = `🚨 Obstáculo à FRENTE a ${nivel} cm`; isDanger = true;
+    } else if (esq !== null && esq < THRESHOLD_CM) {
+      const nivel = Math.floor(esq / 10) * 10;
+      aviso = `Obstáculo à esquerda a ${nivel} centímetros`;
+      visualText = `⚠️ Obstáculo à ESQUERDA a ${nivel} cm`; isDanger = true;
+    } else if (dir !== null && dir < THRESHOLD_CM) {
+      const nivel = Math.floor(dir / 10) * 10;
+      aviso = `Obstáculo à direita a ${nivel} centímetros`;
+      visualText = `⚠️ Obstáculo à DIREITA a ${nivel} cm`; isDanger = true;
+    } else {
+      aviso = "Caminho livre";
+      visualText = '✅ Área livre'; isDanger = false;
+    }
+    alerta.textContent = visualText;
+    alerta.style.backgroundColor = isDanger ? '#b91c1c' : '#21262d';
+    if (aviso !== ultimoAviso) { falar(aviso); ultimoAviso = aviso; }
+  }
+
+  // Simulação de dados a cada 1s
+  setInterval(() => {
+    const esq = Math.random() > 0.1 ? Math.floor(Math.random() * 300) : null;
+    const dir = Math.random() > 0.1 ? Math.floor(Math.random() * 300) : null;
+    updateSensor('esq', esq);
+    updateSensor('dir', dir);
+    processarSensores(esq, dir);
+  }, 1000);
+
+  // Compartilhar localização
+  btnLocation.onclick = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocalização não é suportada nesse navegador.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const lat = pos.coords.latitude.toFixed(5);
+        const lon = pos.coords.longitude.toFixed(5);
+        const link = `https://www.google.com/maps?q=${lat},${lon}`;
+
+        if (navigator.share) {
+          navigator.share({
+            title: "Minha Localização",
+            text: "Estou aqui, veja no mapa:",
+            url: link
+          }).catch(err => console.log("Compartilhamento cancelado:", err));
+        } else {
+          // fallback se o navegador não suportar Web Share API
+          window.open(link, "_blank");
+        }
+      },
+      err => {
+        alert("Erro ao obter localização: " + err.message);
+      }
+    );
+  };
+</script>
+</body>
+</html>
