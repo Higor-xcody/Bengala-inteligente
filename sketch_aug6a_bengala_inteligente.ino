@@ -71,9 +71,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <div id="qualidade-dir" style="font-size: 0.8rem; margin-top: 8px;">Aguardando…</div>
   </div>
 </div>
-
-<div id="alerta" class="alert">🔌 Conecte ao Wi-Fi "<strong>Coringa</strong>" (senha: eutono3g) e abra: <strong>http://192.168.4.1/</strong></div>
-
 <div class="history">
   <h3>Histórico</h3>
   <ul id="historico"></ul>
@@ -279,3 +276,4 @@ void loop() {
     Serial.println(json);
   }
 }
+
